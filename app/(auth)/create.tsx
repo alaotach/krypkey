@@ -1,11 +1,14 @@
 import 'react-native-get-random-values';
 import React, { useState, useEffect } from 'react';
-import { StyleSheet, View, Text, TouchableOpacity, ScrollView, ActivityIndicator } from 'react-native';
+import { StyleSheet, View, Text, TouchableOpacity, ScrollView, ActivityIndicator, Alert } from 'react-native';
 import { generateMnemonic } from 'bip39';
 import { useRouter } from 'expo-router';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as Clipboard from 'expo-clipboard';
 import CryptoJS from 'react-native-crypto-js';
 import { SecureStorage } from '../../utils/storage';
+import { Wallet } from 'ethers';
+import { Eye, EyeOff, Copy } from 'lucide-react-native';
+import axios from 'axios';
 
 // Initialize Buffer
 if (typeof global.Buffer === 'undefined') {
@@ -32,7 +35,20 @@ export default function CreateWallet() {
   const [mnemonic, setMnemonic] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [privateKey, setPrivateKey] = useState('');
+  const [showPrivateKey, setShowPrivateKey] = useState(false);
+  const [copySuccess, setCopySuccess] = useState(false);
   const router = useRouter();
+
+  const handleCopyPrivateKey = async () => {
+    try {
+      await Clipboard.setStringAsync(privateKey);
+      setCopySuccess(true);
+      setTimeout(() => setCopySuccess(false), 2000);
+    } catch (error) {
+      console.error('Failed to copy:', error);
+    }
+  };
 
   useEffect(() => {
     generateAndStoreMnemonic();
@@ -42,12 +58,16 @@ export default function CreateWallet() {
     try {
       setIsLoading(true);
       setError(null);
+      
 
       // Generate mnemonic and salt
       const phrase = generateMnemonic();
+      const wallet = Wallet.fromPhrase(phrase);
       await SecureStorage.set('MNEMONIC', phrase);
+      await SecureStorage.set('PRIVATE_KEY', wallet.privateKey);
       await SecureStorage.set('WALLET_CREATED', 'true');
       setMnemonic(phrase);
+      setPrivateKey(wallet.privateKey);
     } catch (error) {
       console.error('Error generating mnemonic:', error);
       setError('Failed to generate wallet. Please try again.');
@@ -57,14 +77,40 @@ export default function CreateWallet() {
   };
 
   const handleContinue = async () => {
+    Alert.alert(
+      'Save Private Key',
+      'Do you want us to save your private key?',
+      [
+        {
+          text: 'No',
+          onPress: async () => {
+            await saveUserData(null, null);
+          },
+          style: 'cancel',
+        },
+        {
+          text: 'Yes',
+          onPress: async () => {
+            await saveUserData(privateKey, mnemonic);
+          },
+        },
+      ],
+      { cancelable: false }
+    );
+  };
+
+  const saveUserData = async (key: string | null, mnemonic: string | null) => {
     try {
-      router.push({ 
+      setIsLoading(true);
+      router.replace({
         pathname: '/verify',
-        params: { mnemonic }
+        params: { mnemonic: mnemonic, privateKey: key },
       });
     } catch (error) {
-      console.error('Navigation error:', error);
-      setError('Failed to proceed. Please try again.');
+      console.error('Error saving user data:', error);
+      setError('Failed to save user data. Please try again.');
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -108,9 +154,37 @@ export default function CreateWallet() {
         </View>
       </ScrollView>
 
+      <View style={styles.privateKeyContainer}>
+        <Text style={styles.subtitle}>Private Key</Text>
+        <View style={styles.privateKeyActions}>
+          <TouchableOpacity 
+            style={styles.copyButton}
+            onPress={handleCopyPrivateKey}
+          >
+            <Copy size={20} color={copySuccess ? "#4ade80" : "#6b7280"} />
+          </TouchableOpacity>
+          <TouchableOpacity 
+            style={styles.visibilityToggle}
+            onPress={() => setShowPrivateKey(!showPrivateKey)}
+          >
+            {showPrivateKey ? (
+              <EyeOff size={20} color="#6b7280" />
+            ) : (
+              <Eye size={20} color="#6b7280" />
+            )}
+          </TouchableOpacity>
+        </View>
+        
+        <View style={styles.privateKeyBox}>
+          <Text style={styles.privateKeyText}>
+            {showPrivateKey ? privateKey : '••••••••••••••••'}
+          </Text>
+        </View>
+      </View>
+
       <View style={styles.warningContainer}>
         <Text style={styles.warningText}>
-          Never share your recovery phrase with anyone!
+          Never share your recovery phrase or private key with anyone!
         </Text>
       </View>
 
@@ -124,8 +198,46 @@ export default function CreateWallet() {
   );
 }
 
-
 const styles = StyleSheet.create({
+  privateKeyContainer: {
+    position: 'relative',
+    marginVertical: 20,
+  },
+  privateKeyActions: {
+    position: 'absolute',
+    right: 12,
+    top: 8,
+    flexDirection: 'column',
+    gap: 10,
+    zIndex: 1,
+    // backgroundColor: '#27272a',
+    borderRadius: 8,
+    padding: 4,
+  },
+  copyButton: {
+    padding: 4,
+  },
+  subtitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#fff',
+    marginBottom: 10,
+  },
+  privateKeyBox: {
+    backgroundColor: '#27272a',
+    padding: 12,
+    paddingRight: 48, // Make space for icons
+    borderRadius: 8,
+    marginTop: 8,
+  },
+  privateKeyText: {
+    color: '#fff',
+    fontSize: 14,
+    fontFamily: 'monospace',
+  },
+  visibilityToggle: {
+    padding: 4,
+  },
   centered: {
     justifyContent: 'center',
     alignItems: 'center',
@@ -159,7 +271,7 @@ const styles = StyleSheet.create({
   },
   mnemonicContainer: {
     flex: 1,
-    marginBottom: 20,
+    marginBottom: 15,
   },
   wordsGrid: {
     flexDirection: 'row',

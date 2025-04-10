@@ -1,12 +1,16 @@
 import { Stack } from 'expo-router';
-import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
-import { Shield } from 'lucide-react-native';
-import { useRouter } from 'expo-router';
 
 export default function RootLayout() {
   return (
-    <Stack>
+    <Stack
+      screenOptions={{
+        headerStyle: {
+          backgroundColor: '#1a1b1e',
+        },
+        headerTintColor: '#fff',
+        headerShown: false // This hides the header globally
+      }}
+    >
       <Stack.Screen 
         name="index" 
         options={{ 
@@ -25,8 +29,13 @@ export default function RootLayout() {
           headerShown: false 
         }} 
       />
+      <Stack.Screen 
+        name="modal" 
+        options={{ 
+          presentation: 'modal',
+          headerShown: false
+        }} 
+      />
     </Stack>
   );
 }
-
-// Move the Welcome screen content to index.tsx

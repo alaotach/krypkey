@@ -1,5 +1,5 @@
 import { Tabs } from 'expo-router';
-import { Key, Settings } from 'lucide-react-native';
+import { Key, Settings, QrCode } from 'lucide-react-native';
 
 export default function TabLayout() {
   return (
@@ -18,10 +18,17 @@ export default function TabLayout() {
       }}
     >
       <Tabs.Screen
-        name="index"
+        name="passwords"
         options={{
           title: 'Passwords',
           tabBarIcon: ({ color }) => <Key size={24} color={color} />,
+        }}
+      />
+      <Tabs.Screen
+        name="scan"
+        options={{
+          title: 'Scan QR',
+          tabBarIcon: ({ color }) => <QrCode size={24} color={color} />,
         }}
       />
       <Tabs.Screen

@@ -1,28 +1,52 @@
 import React, { useState, useEffect } from 'react';
-import { StyleSheet, View, Text, TouchableOpacity, ActivityIndicator } from 'react-native';
+import { StyleSheet, View, Text, TouchableOpacity, ActivityIndicator, TextInput, Modal, Button, Alert } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { SecureStorage } from '../../utils/storage';
+import axios from 'axios';
 
 interface RouteParams {
   mnemonic: string;
+  privateKey: string | null;
 }
 
 export default function VerifyMnemonic() {
-  const { mnemonic } = useLocalSearchParams<RouteParams>();
+  const { mnemonic, privateKey } = useLocalSearchParams<RouteParams>();
   const router = useRouter();
   const [selectedWords, setSelectedWords] = useState<string[]>([]);
   const [shuffledWords, setShuffledWords] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [verificationIndexes] = useState<number[]>([2, 5, 8, 11]);
+  const [isModalVisible, setIsModalVisible] = useState(false);
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [modalError, setModalError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!mnemonic) {
-      setError('No mnemonic provided');
-      return;
-    }
-    const words = mnemonic.split(' ');
-    setShuffledWords([...words].sort(() => Math.random() - 0.5));
+    const setupMnemonic = async () => {
+      try {
+        let mnemonicToUse = mnemonic;
+        
+        // If no mnemonic is passed as a param (user chose not to save it),
+        // retrieve it from secure storage
+        if (!mnemonicToUse) {
+          mnemonicToUse = await SecureStorage.get('MNEMONIC');
+          if (!mnemonicToUse) {
+            setError('No mnemonic found. Please go back and try again.');
+            return;
+          }
+        }
+        
+        const words = mnemonicToUse.split(' ');
+        setShuffledWords([...words].sort(() => Math.random() - 0.5));
+      } catch (error) {
+        console.error('Error setting up verification:', error);
+        setError('Failed to setup verification. Please try again.');
+      }
+    };
+    
+    setupMnemonic();
   }, [mnemonic]);
 
   const handleWordSelect = (word: string): void => {
@@ -38,21 +62,25 @@ export default function VerifyMnemonic() {
     try {
       setIsLoading(true);
       setError(null);
-
-      if (!mnemonic) {
-        setError('Invalid mnemonic');
-        return;
+      
+      let mnemonicToVerify = mnemonic;
+      
+      if (!mnemonicToVerify) {
+        mnemonicToVerify = await SecureStorage.get('MNEMONIC');
+        if (!mnemonicToVerify) {
+          setError('Could not retrieve mnemonic for verification.');
+          return;
+        }
       }
-
-      const originalWords = mnemonic.split(' ');
+  
+      const originalWords = mnemonicToVerify.split(' ');
       const isCorrect = verificationIndexes.every((index, i) => 
         originalWords[index] === selectedWords[i]
       );
       
       if (isCorrect) {
-        await SecureStorage.set('MNEMONIC', mnemonic);
         await SecureStorage.set('WALLET_CREATED', 'true');
-        router.replace('/(tabs)');
+        setIsModalVisible(true);
       } else {
         setSelectedWords([]);
         setError('Incorrect words selected. Please try again.');
@@ -60,6 +88,80 @@ export default function VerifyMnemonic() {
     } catch (error) {
       console.error('Verification error:', error);
       setError('Failed to verify phrase. Please try again.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const checkUsernameAvailability = async () => {
+    try {
+      const response = await axios.post('http://192.168.73.248:5000/api/users/check-username', { username });
+      if (response.data.message === 'Username available') {
+        return true;
+      } else {
+        setModalError('Username already taken. Please choose a different username.');
+        return false;
+      }
+    } catch (error) {
+      console.error('Error checking username:', error);
+      setModalError('Failed to check username. Please try again.');
+      return false;
+    }
+  };
+
+  const saveUserData = async () => {
+    try {
+      if (password !== confirmPassword) {
+        setModalError('Passwords do not match. Please try again.');
+        return;
+      }
+  
+      if (!(await checkUsernameAvailability())) {
+        return;
+      }
+  
+      setIsLoading(true);
+      
+      // Get mnemonic from params or storage if necessary
+      let mnemonicToUse = mnemonic;
+      if (!mnemonicToUse) {
+        mnemonicToUse = await SecureStorage.get('MNEMONIC');
+      }
+      
+      // Get private key from params or storage if necessary
+      let privateKeyToUse = privateKey;
+      if (!privateKeyToUse) {
+        privateKeyToUse = await SecureStorage.get('PRIVATE_KEY');
+      }
+      
+      // Create user first
+      await axios.post('http://192.168.73.248:5000/api/users/create', {
+        username,
+        password,
+        mnemonic: mnemonicToUse,
+        privateKey: privateKeyToUse,
+      });
+  
+      // Then login to get token
+      const loginResponse = await axios.post('http://192.168.73.248:5000/api/users/login', {
+        username,
+        password,
+        private_key: privateKeyToUse
+      });
+  
+      if (loginResponse.data.token) {
+        await SecureStorage.set('AUTH_TOKEN', loginResponse.data.token);
+        await SecureStorage.set('USERNAME', username);
+        await SecureStorage.set('PASSWORD', password);
+        await SecureStorage.set('WALLET_CREATED', 'true');
+        router.replace('/(tabs)/passwords');
+      } else {
+        throw new Error('No auth token received');
+      }
+  
+    } catch (error: any) {
+      console.error('Error saving user data:', error.response?.data || error);
+      setModalError(error.response?.data?.message || 'Failed to save user data. Please try again.');
     } finally {
       setIsLoading(false);
     }
@@ -119,6 +221,44 @@ export default function VerifyMnemonic() {
       >
         <Text style={styles.verifyButtonText}>Verify</Text>
       </TouchableOpacity>
+
+      <Modal
+        visible={isModalVisible}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => setIsModalVisible(false)}
+      >
+        <View style={styles.modalContainer}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Enter Username and Password</Text>
+            {modalError && <Text style={styles.modalErrorText}>{modalError}</Text>}
+            <TextInput
+              style={styles.input}
+              placeholder="Username"
+              value={username}
+              onChangeText={setUsername}
+            />
+            <TextInput
+              style={styles.input}
+              placeholder="Password"
+              value={password}
+              onChangeText={setPassword}
+              secureTextEntry
+            />
+            <TextInput
+              style={styles.input}
+              placeholder="Confirm Password"
+              value={confirmPassword}
+              onChangeText={setConfirmPassword}
+              secureTextEntry
+            />
+            <View style={styles.modalButtons}>
+              <Button title="Cancel" onPress={() => setIsModalVisible(false)} />
+              <Button title="OK" onPress={saveUserData} />
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -206,5 +346,42 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 16,
     fontWeight: '600',
+  },
+  modalContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+  },
+  modalContent: {
+    width: '80%',
+    backgroundColor: '#fff',
+    padding: 20,
+    borderRadius: 10,
+    alignItems: 'center',
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    marginBottom: 10,
+  },
+  modalErrorText: {
+    color: '#ef4444',
+    fontSize: 14,
+    marginBottom: 10,
+    textAlign: 'center',
+  },
+  input: {
+    width: '100%',
+    padding: 10,
+    borderWidth: 1,
+    borderColor: '#ccc',
+    borderRadius: 5,
+    marginBottom: 20,
+  },
+  modalButtons: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    width: '100%',
   },
 });
