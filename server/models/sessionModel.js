@@ -4,7 +4,8 @@ const pendingPasswordSchema = new mongoose.Schema({
   title: { type: String, required: true },
   password: { type: String, required: true },
   saved: { type: Boolean, default: false },
-  createdAt: { type: Date, default: Date.now }
+  createdAt: { type: Date, default: Date.now },
+  category: { type: String, default: 'login' },
 });
 
 // Update the sessionSchema to handle custom expiry

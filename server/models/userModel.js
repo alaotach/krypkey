@@ -6,7 +6,7 @@ const passwordSchema = new mongoose.Schema({
   category: { type: String, required: false }, // login, social, card, voucher, giftcard, address, other
   notes: { type: String },
   // Login specific fields
-  username: { type: String },
+  loginUsername: { type: String },
   password: { type: String },
   website: { type: String },
   // Social media specific fields

@@ -43,9 +43,16 @@ const encryptPassword = (password, privateKey) => {
 //   }
 // };
 
+// Add more detailed logging to the processPendingPasswords function
 exports.processPendingPasswords = async (req, res) => {
   try {
     const { sessionId, username, privateKey } = req.body;
+    
+    console.log('Processing pending passwords request:', {
+      sessionId,
+      username,
+      hasPrivateKey: !!privateKey
+    });
     
     if (!sessionId || !username || !privateKey) {
       return res.status(400).json({ 
@@ -58,6 +65,11 @@ exports.processPendingPasswords = async (req, res) => {
     if (!session) {
       return res.status(404).json({ message: 'Session not found' });
     }
+    
+    console.log('Session found:', {
+      authenticated: session.authenticated,
+      pendingPasswordsCount: session.pendingPasswords.length
+    });
     
     // Find the user
     const user = await User.findOne({ username });
@@ -82,50 +94,174 @@ exports.processPendingPasswords = async (req, res) => {
     // Process each password
     for (const pendingPassword of pendingPasswords) {
       try {
-        const { title, password, _id } = pendingPassword;
-        let plainTextPassword = password;
+        const { title, password: encryptedData, _id, category } = pendingPassword;
         
-        // Step 1: Try to decrypt with session token if using XOR encryption
-        if (typeof password === 'string' && password.includes(',')) {
-          try {
-            plainTextPassword = decryptWithSessionToken(password, session.token);
-            console.log('Successfully decrypted password with XOR method');
-          } catch (decryptError) {
-            console.error('Failed to decrypt with session token:', decryptError);
-          }
-        } 
-        // Step 2: Otherwise try to decrypt with server-side encryption (if in IV:data format)
-        else if (typeof password === 'string' && password.includes(':')) {
-          try {
-            // For IV:data format, use the more specific decrypt function
-            const [ivHex, encryptedText] = password.split(':');
-            const iv = Buffer.from(ivHex, 'hex');
-            const key = crypto.createHash('sha256').update(session.token).digest();
-            const decipher = crypto.createDecipheriv('aes-256-cbc', key, iv);
-            let decrypted = decipher.update(encryptedText, 'hex', 'utf8');
-            decrypted += decipher.final('utf8');
-            plainTextPassword = decrypted;
-            console.log('Successfully decrypted password with AES CBC method');
-          } catch (decryptError) {
-            console.error('Failed to decrypt IV:data format:', decryptError);
-          }
+        console.log(`Processing pending password: "${title}" (${category || 'no category'})`);
+        
+        // Step 1: Decrypt the password with the session token
+        let plainTextPassword;
+        try {
+          plainTextPassword = decryptWithSessionToken(encryptedData, session.token);
+          console.log('Successfully decrypted password data:', {
+            length: plainTextPassword.length,
+            sample: plainTextPassword.substring(0, 30) + (plainTextPassword.length > 30 ? '...' : '')
+          });
+        } catch (decryptError) {
+          console.error('Error decrypting password data:', decryptError);
+          plainTextPassword = encryptedData; // Fallback to using as-is
         }
         
-        // Step 3: Encrypt with user's private key
-        const passwordToStore = encryptPassword(plainTextPassword, privateKey);
+        // Step 2: Check if the password is a JSON string containing the full password object
+        let passwordData = {};
+        let normalizedData = {};
         
-        // Step 4: Add to user's passwords
-        user.passwords.push({
-          title,
-          password: passwordToStore
-        });
+        try {
+          // Parse the JSON string into an object
+          passwordData = JSON.parse(plainTextPassword);
+          
+          console.log('Parsed password data:', {
+            isObject: typeof passwordData === 'object',
+            hasCategory: !!passwordData.category,
+            category: passwordData.category,
+            keys: Object.keys(passwordData)
+          });
+          
+          // Check if this is a structured password object (has fields like category, etc.)
+          if (passwordData && typeof passwordData === 'object') {
+            // Base fields for all categories
+            normalizedData = {
+              title: title || passwordData.title,
+              category: passwordData.category || category || 'login',
+              notes: passwordData.notes,
+              createdAt: passwordData.createdAt || new Date(),
+              updatedAt: new Date()
+            };
+            
+            // Add fields based on category (use the object's category or fallback to parameter)
+            const passwordCategory = passwordData.category || category || 'login';
+            
+            // Copy over specific fields based on category
+            switch(passwordCategory) {
+              case 'login':
+                normalizedData.loginUsername = passwordData.loginUsername || passwordData.username;
+                normalizedData.password = passwordData.password;
+                normalizedData.website = passwordData.website;
+                break;
+              case 'social':
+                normalizedData.loginUsername = passwordData.loginUsername || passwordData.username;
+                normalizedData.password = passwordData.password;
+                normalizedData.platform = passwordData.platform;
+                normalizedData.profileUrl = passwordData.profileUrl;
+                break;
+              case 'card':
+                normalizedData.cardType = passwordData.cardType;
+                normalizedData.cardNumber = passwordData.cardNumber;
+                normalizedData.cardholderName = passwordData.cardholderName;
+                normalizedData.expiryDate = passwordData.expiryDate;
+                normalizedData.cvv = passwordData.cvv;
+                break;
+              case 'voucher':
+                normalizedData.store = passwordData.store;
+                normalizedData.code = passwordData.code;
+                normalizedData.value = passwordData.value;
+                normalizedData.expiryDate = passwordData.expiryDate;
+                break;
+              case 'giftcard':
+                normalizedData.store = passwordData.store;
+                normalizedData.cardNumber = passwordData.cardNumber;
+                normalizedData.pin = passwordData.pin;
+                normalizedData.balance = passwordData.balance;
+                normalizedData.expiryDate = passwordData.expiryDate;
+                break;
+              case 'address':
+                normalizedData.fullName = passwordData.fullName;
+                normalizedData.streetAddress = passwordData.streetAddress;
+                normalizedData.city = passwordData.city;
+                normalizedData.state = passwordData.state;
+                normalizedData.zipCode = passwordData.zipCode;
+                normalizedData.country = passwordData.country;
+                normalizedData.phoneNumber = passwordData.phoneNumber;
+                normalizedData.email = passwordData.email;
+                break;
+              case 'other':
+                normalizedData.customFields = passwordData.customFields;
+                break;
+            }
+            
+            // Log what we're going to encrypt
+            console.log('Normalized data prepared:', {
+              category: normalizedData.category,
+              fields: Object.keys(normalizedData),
+              hasPassword: !!normalizedData.password,
+              hasUsername: !!normalizedData.loginUsername
+            });
+            
+            // Encrypt sensitive fields with user's private key
+            Object.keys(normalizedData).forEach(key => {
+              // Skip if value is undefined/null/empty
+              if (!normalizedData[key]) return;
+              
+              // Don't encrypt these fields
+              if (['title', 'category', 'notes', 'createdAt', 'updatedAt', 'loginUsername', 'website', 'platform', 'profileUrl',
+                   'cardType', 'cardholderName', 'store', 'value', 'balance', 'fullName', 'streetAddress', 'city', 'state',
+                   'zipCode', 'country', 'phoneNumber', 'email', 'expiryDate'].includes(key)) {
+                return;
+              }
+              
+              // Only encrypt sensitive fields that have values
+              if (['password', 'cardNumber', 'cvv', 'code', 'pin'].includes(key)) {
+                console.log(`Encrypting sensitive field: ${key}`);
+                normalizedData[key] = encryptPassword(normalizedData[key], privateKey);
+              }
+            });
+            
+            // Also handle custom fields if present
+            if (normalizedData.customFields && Array.isArray(normalizedData.customFields)) {
+              normalizedData.customFields = normalizedData.customFields.map(field => {
+                if (field.isSecret && field.value) {
+                  console.log(`Encrypting custom field: ${field.label}`);
+                  return {
+                    ...field,
+                    value: encryptPassword(field.value, privateKey)
+                  };
+                }
+                return field;
+              });
+            }
+            
+            // Add to user's passwords
+            user.passwords.push(normalizedData);
+          } else {
+            // Not a structured object, treat as a simple password
+            console.log('No structured data found, treating as simple password');
+            const simplePasswordData = {
+              title,
+              password: encryptPassword(plainTextPassword, privateKey),
+              category: category || 'login',
+              createdAt: new Date(),
+              updatedAt: new Date()
+            };
+            user.passwords.push(simplePasswordData);
+          }
+        } catch (parseError) {
+          console.error('Error parsing password data:', parseError);
+          // Not a JSON string, continue with the plain text password
+          console.log('Using plaintext password (not JSON)');
+          const simplePasswordData = {
+            title,
+            password: encryptPassword(plainTextPassword, privateKey),
+            category: category || 'login',
+            createdAt: new Date(),
+            updatedAt: new Date()
+          };
+          user.passwords.push(simplePasswordData);
+        }
         
-        // Mark this password for removal - store as string to ensure consistent comparison
+        // Mark this password for removal
         passwordIds.push(_id.toString());
         processedCount++;
-        
       } catch (passwordError) {
-        console.error('Error processing password:', passwordError);
+        console.error('Error processing individual password:', passwordError);
       }
     }
     
@@ -146,7 +282,7 @@ exports.processPendingPasswords = async (req, res) => {
       // After confirming user save was successful, remove processed passwords from session
       try {
         console.log('Original pending passwords count:', session.pendingPasswords.length);
-        console.log('Passwords to remove:', passwordIds);
+        console.log('Passwords to remove IDs:', passwordIds);
         
         // Using a direct approach to remove the passwords by ID
         const remainingPasswords = [];
@@ -173,7 +309,6 @@ exports.processPendingPasswords = async (req, res) => {
       message: `Successfully processed ${processedCount} passwords`,
       processedCount
     });
-    
   } catch (error) {
     console.error('Error processing pending passwords:', error);
     res.status(500).json({ 
@@ -183,25 +318,68 @@ exports.processPendingPasswords = async (req, res) => {
   }
 };
 
+// Enhanced decryptWithSessionToken function to handle different formats
 function decryptWithSessionToken(encryptedData, token) {
   try {
-    if (!encryptedData.includes(',')) {
-      throw new Error('Invalid encrypted data format');
+    // Log the encrypted data format for debugging
+    console.log('Decrypting data format:', {
+      hasColon: encryptedData.includes(':'),
+      hasComma: encryptedData.includes(','),
+      length: encryptedData.length,
+      firstChars: encryptedData.substring(0, 10) + '...'
+    });
+    
+    // If using the format with IV and encrypted text separated by colon (AES)
+    if (encryptedData.includes(':')) {
+      try {
+        const [ivHex, encryptedText] = encryptedData.split(':');
+        const iv = Buffer.from(ivHex, 'hex');
+        const key = crypto.createHash('sha256').update(token).digest();
+        const decipher = crypto.createDecipheriv('aes-256-cbc', key, iv);
+        let decrypted = decipher.update(encryptedText, 'hex', 'utf8');
+        decrypted += decipher.final('utf8');
+        return decrypted;
+      } catch(e) {
+        console.error('Error in AES decryption:', e);
+        return encryptedData; // Return original data if decryption fails
+      }
+    } 
+    // If using the XOR encryption from the extension (comma-separated values)
+    else if (encryptedData.includes(',')) {
+      try {
+        const dataArray = encryptedData.split(',').map(Number);
+        const keyData = Buffer.from(token, 'utf8');
+        const decrypted = new Uint8Array(dataArray.length);
+        
+        for (let i = 0; i < dataArray.length; i++) {
+          decrypted[i] = dataArray[i] ^ keyData[i % keyData.length];
+        }
+        
+        const result = new TextDecoder().decode(decrypted);
+        
+        // Check if the result is valid JSON, if parsing fails, return as-is
+        try {
+          JSON.parse(result);
+          console.log('Successfully parsed decrypted data as JSON');
+        } catch (e) {
+          console.log('Decrypted data is not valid JSON');
+        }
+        
+        return result;
+      } catch(e) {
+        console.error('Error in XOR decryption:', e);
+        return encryptedData; // Return original data if decryption fails
+      }
     }
-    
-    const dataArray = encryptedData.split(',').map(Number);
-    const keyData = Buffer.from(token).toString('utf8');
-    const keyBytes = Array.from(Buffer.from(keyData, 'utf8'));
-    const decrypted = new Uint8Array(dataArray.length);
-    
-    for (let i = 0; i < dataArray.length; i++) {
-      decrypted[i] = dataArray[i] ^ keyBytes[i % keyBytes.length];
+    // For anything else, assume it's plaintext
+    else {
+      console.log('Using plaintext data (no encryption detected)');
+      return encryptedData;
     }
-    
-    return Buffer.from(decrypted).toString('utf8');
   } catch (error) {
-    console.error('Session token decryption error:', error);
-    throw error;
+    console.error('Session decryption error:', error);
+    // Return original data if decryption completely fails
+    return encryptedData;
   }
 }
 
@@ -329,6 +507,8 @@ exports.authenticateSession = async (req, res) => {
     // Re-encrypt them with the user's private key
     // In the authenticateSession function, where pending passwords are processed:
 
+// In the authenticateSession function, modify the pending passwords processing:
+
 // Process any pending passwords that were added via the extension
 if (session.pendingPasswords && session.pendingPasswords.length > 0) {
   console.log(`Processing ${session.pendingPasswords.length} pending passwords...`);
@@ -338,24 +518,133 @@ if (session.pendingPasswords && session.pendingPasswords.length > 0) {
   // Update the user's passwords with the pending ones
   for (const pendingPassword of pendingPasswords) {
     try {
-      // Try to decrypt with session token first
-      let passwordToStore = pendingPassword.password;
-      try {
-        const decryptedPassword = decryptWithSessionToken(passwordToStore, token);
-        
-        // Now encrypt with the user's private key
-        const userController = require('./userController');
-        passwordToStore = userController.encryptPassword(decryptedPassword, privateKey);
-      } catch (encErr) {
-        console.error('Error processing password encryption:', encErr);
-        // Continue with original password as fallback
-      }
+      const { title, password: encryptedData, category } = pendingPassword;
       
-      // Add password to user's collection
-      user.passwords.push({
-        title: pendingPassword.title,
-        password: passwordToStore
-      });
+      console.log(`Processing pending password: "${title}" (${category || 'no category'})`);
+      
+      // Try to decrypt with session token first
+      try {
+        const decryptedPassword = decryptWithSessionToken(encryptedData, token);
+        
+        // Try to parse as JSON to extract structured data
+        try {
+          const parsedData = JSON.parse(decryptedPassword);
+          
+          // If we have a structured password object, use it
+          if (parsedData && typeof parsedData === 'object') {
+            // Now encrypt with the user's private key
+            let normalizedData = {
+              title: title || parsedData.title,
+              category: parsedData.category || category || 'login',
+              notes: parsedData.notes,
+              createdAt: parsedData.createdAt || new Date(),
+              updatedAt: new Date()
+            };
+            
+            // Copy specific fields based on category
+            switch(normalizedData.category) {
+              case 'login':
+                normalizedData.loginUsername = parsedData.loginUsername || parsedData.username;
+                normalizedData.password = parsedData.password ? encryptPassword(parsedData.password, privateKey) : null;
+                normalizedData.website = parsedData.website;
+                break;
+              case 'social':
+                normalizedData.loginUsername = parsedData.loginUsername || parsedData.username;
+                normalizedData.password = parsedData.password ? encryptPassword(parsedData.password, privateKey) : null;
+                normalizedData.platform = parsedData.platform;
+                normalizedData.profileUrl = parsedData.profileUrl;
+                break;
+              case 'card':
+                normalizedData.cardType = parsedData.cardType;
+                normalizedData.cardNumber = parsedData.cardNumber ? encryptPassword(parsedData.cardNumber, privateKey) : null;
+                normalizedData.cardholderName = parsedData.cardholderName;
+                normalizedData.expiryDate = parsedData.expiryDate;
+                normalizedData.cvv = parsedData.cvv ? encryptPassword(parsedData.cvv, privateKey) : null;
+                break;
+              case 'voucher':
+                normalizedData.store = parsedData.store;
+                normalizedData.code = parsedData.code ? encryptPassword(parsedData.code, privateKey) : null;
+                normalizedData.value = parsedData.value;
+                normalizedData.expiryDate = parsedData.expiryDate;
+                break;
+              case 'giftcard':
+                normalizedData.store = parsedData.store;
+                normalizedData.cardNumber = parsedData.cardNumber ? encryptPassword(parsedData.cardNumber, privateKey) : null;
+                normalizedData.pin = parsedData.pin ? encryptPassword(parsedData.pin, privateKey) : null;
+                normalizedData.balance = parsedData.balance;
+                normalizedData.expiryDate = parsedData.expiryDate;
+                break;
+              case 'address':
+                normalizedData.fullName = parsedData.fullName;
+                normalizedData.streetAddress = parsedData.streetAddress;
+                normalizedData.city = parsedData.city;
+                normalizedData.state = parsedData.state;
+                normalizedData.zipCode = parsedData.zipCode;
+                normalizedData.country = parsedData.country;
+                normalizedData.phoneNumber = parsedData.phoneNumber;
+                normalizedData.email = parsedData.email;
+                break;
+              case 'other':
+                // Handle custom fields, ensuring we properly encrypt secret fields
+                if (parsedData.customFields && Array.isArray(parsedData.customFields)) {
+                  normalizedData.customFields = parsedData.customFields.map(field => {
+                    if (field.isSecret && field.value) {
+                      return {
+                        ...field,
+                        value: encryptPassword(field.value, privateKey)
+                      };
+                    }
+                    return field;
+                  });
+                }
+                break;
+              default:
+                // For simple passwords or unrecognized categories
+                normalizedData.password = parsedData.password ? 
+                  encryptPassword(parsedData.password, privateKey) : 
+                  encryptPassword(decryptedPassword, privateKey);
+            }
+            
+            // Log the normalized data structure before adding
+            console.log(`Normalized ${normalizedData.category} data with fields:`, Object.keys(normalizedData));
+            
+            // Add password to user's collection
+            user.passwords.push(normalizedData);
+            console.log(`Added structured password "${title}" with category "${normalizedData.category}"`);
+          } else {
+            // Just a simple JSON string, encrypt it
+            user.passwords.push({
+              title,
+              password: encryptPassword(decryptedPassword, privateKey),
+              category: category || 'login',
+              createdAt: new Date(),
+              updatedAt: new Date()
+            });
+            console.log(`Added simple password "${title}" with category "${category || 'login'}"`);
+          }
+        } catch (jsonError) {
+          // Not JSON, treat as simple string
+          console.error('JSON parse error:', jsonError.message);
+          user.passwords.push({
+            title,
+            password: encryptPassword(decryptedPassword, privateKey),
+            category: category || 'login',
+            createdAt: new Date(),
+            updatedAt: new Date()
+          });
+          console.log(`Added plain password "${title}" with category "${category || 'login'}"`);
+        }
+      } catch (decryptError) {
+        console.error('Error decrypting password:', decryptError);
+        // Use encrypted data as fallback
+        user.passwords.push({
+          title,
+          password: encryptPassword(encryptedData, privateKey),
+          category: category || 'login',
+          createdAt: new Date(),
+          updatedAt: new Date()
+        });
+      }
       
       // Mark this pending password for deletion
       processedIds.push(pendingPassword._id);
@@ -541,7 +830,17 @@ exports.verifySession = async (req, res) => {
 
 exports.addPendingPassword = async (req, res) => {
   try {
-    const { sessionId, title, password } = req.body;
+    const { sessionId, title, password, category } = req.body;
+    
+    console.log('Adding pending password:', {
+      sessionId,
+      title,
+      hasPassword: !!password,
+      passwordLength: password ? password.length : 0,
+      isJson: password && typeof password === 'string' && 
+              (password.startsWith('{') || password.startsWith('[')),
+      category: category || 'login'  // Ensure we have a default category
+    });
     
     if (!sessionId || !title || !password) {
       return res.status(400).json({ message: 'Missing required fields' });
@@ -555,14 +854,19 @@ exports.addPendingPassword = async (req, res) => {
     // Encrypt the password with the session token as the key
     const encryptedPassword = encryptWithSessionToken(password, session.token);
     
-    // Add to pending passwords
+    // Add to pending passwords with explicit category
     session.pendingPasswords.push({
       title,
       password: encryptedPassword,
-      saved: false
+      saved: false,
+      category: category || 'login'  // Use provided category or default to login
     });
     
     await session.save();
+    
+    console.log('Password saved for synchronization. Current count:', 
+                session.pendingPasswords.length);
+    
     res.status(201).json({ message: 'Password saved for synchronization' });
   } catch (error) {
     console.error('Error adding pending password:', error);
@@ -623,24 +927,68 @@ exports.verifyAccessMethod = async (req, res) => {
   }
 };
 
+// In getPendingPasswords function or similar, ensure you include the category field
 exports.getPendingPasswords = async (req, res) => {
   try {
-    const { sessionId, username } = req.query;
+    const { sessionId } = req.query;
     
-    // Authenticate via user authentication middleware
-    const session = await Session.findOne({ 
-      sessionId,
-      username: req.user.username
-    });
+    if (!sessionId) {
+      return res.status(400).json({ message: 'Session ID is required' });
+    }
     
+    const session = await Session.findOne({ sessionId });
     if (!session) {
       return res.status(404).json({ message: 'Session not found' });
     }
     
-    // Return only pending passwords that haven't been saved
-    const pendingPasswords = session.pendingPasswords.filter(p => !p.saved);
+    // Process the pending passwords to ensure they are in the right format
+    const pendingPasswords = session.pendingPasswords.map(p => {
+      try {
+        // If the password is encrypted, try to decrypt it
+        let processedPassword = p.password;
+        
+        if (session.token && (processedPassword.includes(':') || processedPassword.includes(','))) {
+          try {
+            processedPassword = decryptWithSessionToken(processedPassword, session.token);
+            
+            // Check if it's a JSON string and extract the password if needed
+            try {
+              const parsed = JSON.parse(processedPassword);
+              if (parsed && typeof parsed === 'object' && parsed.password) {
+                // If it's a structured object, use the password field
+                processedPassword = parsed.password;
+              }
+            } catch (e) {
+              // Not JSON, use as is
+            }
+          } catch (decryptError) {
+            console.error('Error decrypting pending password:', decryptError);
+            // If decryption fails, keep the original value
+          }
+        }
+        
+        return {
+          _id: p._id,
+          title: p.title,
+          password: processedPassword,
+          saved: p.saved,
+          category: p.category || 'login', // Ensure category is always returned
+          createdAt: p.createdAt
+        };
+      } catch (error) {
+        console.error('Error processing pending password:', error);
+        return {
+          _id: p._id,
+          title: p.title,
+          password: '●●●●●●●●', // Fallback to masked password on error
+          saved: p.saved,
+          category: p.category || 'login',
+          createdAt: p.createdAt
+        };
+      }
+    });
     
-    res.status(200).json({ pendingPasswords });
+    return res.status(200).json({ pendingPasswords });
   } catch (error) {
     console.error('Error getting pending passwords:', error);
     res.status(500).json({ message: 'Server error' });

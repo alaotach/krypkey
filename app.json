@@ -1,0 +1,12 @@
+{
+  "expo": {
+    "extra": {
+      "eas": {
+        "projectId": "e3888f76-3072-47a2-92d3-2269523507de"
+      }
+    },
+    "android": {
+      "package": "com.alaotach.krypkey"
+    }
+  }
+}

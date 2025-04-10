@@ -268,7 +268,7 @@ exports.getPasswords = async (req, res) => {
           title: pwd.title,
           category: pwd.category || 'login',
           notes: pwd.notes,
-          username: pwd.username,
+          loginUsername: pwd.loginUsername,
           password: pwd.password ? decryptPassword(pwd.password, privateKey) : '',
           website: pwd.website,
           platform: pwd.platform,
