@@ -5,7 +5,7 @@ import { useRouter } from 'expo-router';
 import * as LocalAuthentication from 'expo-local-authentication';
 import { Shield } from 'lucide-react-native';
 import axios from 'axios';
-import KrypKeyAutofillService from '../../utils/KrypKeyAutofillService';
+import {KrypKeyAutofillService} from '../../utils/KrypKeyAutofillService';
 import { ScrollView } from 'react-native';
 import Haptics from 'expo-haptics';
 
@@ -28,7 +28,7 @@ export default function SettingsTab() {
   const loadSessions = async () => {
     try {
       const username = await SecureStorage.get('USERNAME');
-      const response = await axios.get('http://192.168.73.248:5000/api/sessions/list', {
+      const response = await axios.get('http://192.168.179.248:5000/api/sessions/list', {
         params: { username }
       });
       setSessions(response.data);
@@ -137,7 +137,7 @@ const handleRemoveSession = async (sessionId: string) => {
           onPress: async () => {
             // Send request to remove the session
             const response = await axios.post(
-              'http://192.168.73.248:5000/api/sessions/delete',
+              'http://192.168.179.248:5000/api/sessions/delete',
               { sessionId },
               {
                 headers: {

@@ -438,7 +438,7 @@ const completeDeactivation = async () => {
         // Continue with login using the stored credentials
         const username = await SecureStorage.get('USERNAME');
         const private_key = await SecureStorage.get('PRIVATE_KEY');
-        const response = await axios.post('http://192.168.73.248:5000/api/users/login', {
+        const response = await axios.post('http://192.168.179.248:5000/api/users/login', {
           username,
           password: storedPassword, // Use the real password for API auth
           private_key
@@ -465,7 +465,7 @@ const completeDeactivation = async () => {
         // Continue with login using the stored credentials
         const username = await SecureStorage.get('USERNAME');
         const private_key = await SecureStorage.get('PRIVATE_KEY');
-        const response = await axios.post('http://192.168.73.248:5000/api/users/login', {
+        const response = await axios.post('http://192.168.179.248:5000/api/users/login', {
           username,
           password: storedPassword,
           private_key
@@ -491,7 +491,7 @@ const completeDeactivation = async () => {
         // Continue with your existing login logic
         const username = await SecureStorage.get('USERNAME');
         const private_key = await SecureStorage.get('PRIVATE_KEY');
-        const response = await axios.post('http://192.168.73.248:5000/api/users/login', {
+        const response = await axios.post('http://192.168.179.248:5000/api/users/login', {
           username,
           password: storedPassword,
           private_key
@@ -540,7 +540,7 @@ const completeDeactivation = async () => {
       if (!username || !authToken) return;
       
       // Get list of sessions for this user with pending passwords
-      const response = await axios.get('http://192.168.73.248:5000/api/sessions/list', {
+      const response = await axios.get('http://192.168.179.248:5000/api/sessions/list', {
         params: { username, pendingOnly: true },
         headers: {
           'Authorization': `Bearer ${authToken}`,
@@ -642,7 +642,7 @@ const completeDeactivation = async () => {
       
       // Authenticate the session
       await axios.post(
-        'http://192.168.73.248:5000/api/sessions/authenticate', 
+        'http://192.168.179.248:5000/api/sessions/authenticate', 
         {
           sessionId: sessionIdInput,
           username,
@@ -700,7 +700,7 @@ const completeDeactivation = async () => {
     try {
       // Use the server-side processing endpoint to handle all encryption/decryption
       const processResponse = await axios.post(
-        'http://192.168.73.248:5000/api/sessions/process-passwords',
+        'http://192.168.179.248:5000/api/sessions/process-passwords',
         {
           sessionId,
           username,
@@ -738,7 +738,7 @@ const completeDeactivation = async () => {
         const storedPassword = await SecureStorage.get('PASSWORD');
         const private_key = await SecureStorage.get('PRIVATE_KEY');
         
-        const response = await axios.post('http://192.168.73.248:5000/api/users/login', {
+        const response = await axios.post('http://192.168.179.248:5000/api/users/login', {
           username,
           password: storedPassword,
           private_key
@@ -769,7 +769,7 @@ const completeDeactivation = async () => {
         const username = await SecureStorage.get('USERNAME');
         const storedPassword = await SecureStorage.get('PASSWORD');
         const private_key = await SecureStorage.get('PRIVATE_KEY');
-        const response = await axios.post('http://192.168.73.248:5000/api/users/login', {
+        const response = await axios.post('http://192.168.179.248:5000/api/users/login', {
           username,
           password: storedPassword,
           private_key
@@ -802,7 +802,7 @@ const completeDeactivation = async () => {
           const storedPassword = await SecureStorage.get('PASSWORD');
           const private_key = await SecureStorage.get('PRIVATE_KEY');
           
-          const response = await axios.post('http://192.168.73.248:5000/api/users/login', {
+          const response = await axios.post('http://192.168.179.248:5000/api/users/login', {
             username,
             password: storedPassword,
             private_key
@@ -839,7 +839,7 @@ const completeDeactivation = async () => {
         const username = await SecureStorage.get('USERNAME');
         const storedPassword = await SecureStorage.get('PASSWORD');
         const private_key = await SecureStorage.get('PRIVATE_KEY');
-        const response = await axios.post('http://192.168.73.248:5000/api/users/login', {
+        const response = await axios.post('http://192.168.179.248:5000/api/users/login', {
           username,
           password: storedPassword,
           private_key
@@ -874,7 +874,7 @@ const completeDeactivation = async () => {
 
       setIsLoading(true);
       const authToken = await SecureStorage.get('AUTH_TOKEN');
-      await axios.post('http://192.168.73.248:5000/api/users/delete', { identifier }, {
+      await axios.post('http://192.168.179.248:5000/api/users/delete', { identifier }, {
         headers: {
           'Authorization': `Bearer ${authToken}`
         }

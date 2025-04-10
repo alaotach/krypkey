@@ -25,7 +25,7 @@ export default function RestoreWallet(): JSX.Element {
 
   const checkUsernameAvailability = async (username: string): Promise<boolean> => {
     try {
-      const response = await axios.post('http://192.168.73.248:5000/api/users/check-username', { username });
+      const response = await axios.post('http://192.168.179.248:5000/api/users/check-username', { username });
       if (response.data.message === 'Username available') {
         return true;
       } else {
@@ -71,7 +71,7 @@ export default function RestoreWallet(): JSX.Element {
   
       // Login to get auth token
       const private_key = await SecureStorage.get('PRIVATE_KEY');
-      const response = await axios.post('http://192.168.73.248:5000/api/users/login', {
+      const response = await axios.post('http://192.168.179.248:5000/api/users/login', {
         username,
         password,
         private_key

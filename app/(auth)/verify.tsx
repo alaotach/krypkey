@@ -95,7 +95,7 @@ export default function VerifyMnemonic() {
 
   const checkUsernameAvailability = async () => {
     try {
-      const response = await axios.post('http://192.168.73.248:5000/api/users/check-username', { username });
+      const response = await axios.post('http://192.168.179.248:5000/api/users/check-username', { username });
       if (response.data.message === 'Username available') {
         return true;
       } else {
@@ -135,7 +135,7 @@ export default function VerifyMnemonic() {
       }
       
       // Create user first
-      await axios.post('http://192.168.73.248:5000/api/users/create', {
+      await axios.post('http://192.168.179.248:5000/api/users/create', {
         username,
         password,
         mnemonic: mnemonicToUse,
@@ -143,7 +143,7 @@ export default function VerifyMnemonic() {
       });
   
       // Then login to get token
-      const loginResponse = await axios.post('http://192.168.73.248:5000/api/users/login', {
+      const loginResponse = await axios.post('http://192.168.179.248:5000/api/users/login', {
         username,
         password,
         private_key: privateKeyToUse
