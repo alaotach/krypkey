@@ -129,53 +129,32 @@ exports.createUser = async (req, res) => {
 
 exports.addPassword = async (req, res) => {
   try {
-    console.log('Received password data:', req.body);
-    const { title, username, privateKey, ...newPassword } = req.body;
-    
-    // Get user from auth middleware
-    const user = req.user;
-    const category = newPassword.category
-    if (!user) {
-      return res.status(401).json({ message: 'Authentication required' });
+    const { category, ...passwordData } = req.body;
+    const user = req.user; // From auth middleware
+    const privateKey = req.privateKey;
+
+    if (!user || !passwordData.title) {
+      return res.status(400).json({ message: 'Missing required parameters' });
     }
 
-    // Validate required fields
-    if (!title || !category) {
-      return res.status(400).json({ message: 'Title and category are required' });
-    }
+    // Check for duplicates based on title and category
+    const existingPasswordIndex = user.passwords.findIndex(pwd => 
+      pwd.title === passwordData.title && 
+      pwd.category === (category || 'login')
+    );
 
-    // Create base password object
-    const passwordData = {
-      title,
-      ...newPassword,
-      createdAt: new Date(),
-      updatedAt: new Date()
-    };
-
-    // Process specific fields based on category
+    // Encrypt sensitive fields based on category
     switch (category) {
       case 'login':
-        if (!passwordData.password) {
-          return res.status(400).json({ message: 'Password is required for login category' });
-        }
-        // Encrypt the password if present
+      case undefined:
+        // Default case is login
         if (passwordData.password && privateKey) {
           passwordData.password = encryptPassword(passwordData.password, privateKey);
         }
         break;
         
-      case 'social':
-        if (!passwordData.password) {
-          return res.status(400).json({ message: 'Password is required for social category' });
-        }
-        // Encrypt the password if present
-        if (passwordData.password && privateKey) {
-          passwordData.password = encryptPassword(passwordData.password, privateKey);
-        }
-        break;
-        
-      case 'card':
-        // Encrypt sensitive card data
+      // Other cases remain the same
+      case 'creditcard':
         if (passwordData.cardNumber && privateKey) {
           passwordData.cardNumber = encryptPassword(passwordData.cardNumber, privateKey);
         }
@@ -185,14 +164,12 @@ exports.addPassword = async (req, res) => {
         break;
         
       case 'voucher':
-        // Encrypt voucher code
         if (passwordData.code && privateKey) {
           passwordData.code = encryptPassword(passwordData.code, privateKey);
         }
         break;
         
       case 'giftcard':
-        // Encrypt gift card data
         if (passwordData.cardNumber && privateKey) {
           passwordData.cardNumber = encryptPassword(passwordData.cardNumber, privateKey);
         }
@@ -202,7 +179,6 @@ exports.addPassword = async (req, res) => {
         break;
         
       case 'other':
-        // Handle custom fields encryption
         if (passwordData.customFields && Array.isArray(passwordData.customFields)) {
           passwordData.customFields = passwordData.customFields.map(field => {
             if (field.isSecret && field.value && privateKey) {
@@ -217,16 +193,48 @@ exports.addPassword = async (req, res) => {
         break;
     }
 
-    // Add password to user's passwords array
-    user.passwords.push(passwordData);
+    // Add category to the password data
+    passwordData.category = category || 'login';
+    
+    // Set update timestamp
+    passwordData.updatedAt = new Date();
+
+    let message;
+    let passwordId;
+    
+    if (existingPasswordIndex !== -1) {
+      // Update existing password
+      const existingPassword = user.passwords[existingPasswordIndex];
+      passwordId = existingPassword._id;
+      
+      // Preserve created date
+      passwordData.createdAt = existingPassword.createdAt;
+      
+      // Update the password
+      user.passwords[existingPasswordIndex] = {
+        ...existingPassword.toObject(),
+        ...passwordData
+      };
+      
+      message = 'Password updated successfully';
+      console.log(`Updated existing password: ${passwordData.title}`);
+    } else {
+      // Add new password
+      passwordData.createdAt = new Date();
+      user.passwords.push(passwordData);
+      passwordId = user.passwords[user.passwords.length - 1]._id;
+      message = 'Password added successfully';
+      console.log(`Added new password: ${passwordData.title}`);
+    }
 
     await user.save();
     res.status(201).json({ 
-      message: 'Password added successfully',
-      passwordId: user.passwords[user.passwords.length - 1]._id
+      message,
+      passwordId,
+      updated: existingPasswordIndex !== -1
     });
   } catch (error) {
-    console.error('Error adding password:', error);
+    console.error('Error adding/updating password:', error);
     res.status(500).json({ message: 'Server error' });
   }
 };
@@ -318,6 +326,7 @@ exports.getPasswords = async (req, res) => {
     res.status(500).json({ message: `Server error: ${error.message}` });
   }
 };
+
 exports.deleteUser = async (req, res) => {
   try {
     const { username } = req.body;
@@ -328,5 +337,39 @@ exports.deleteUser = async (req, res) => {
     res.status(200).json({ message: 'User deleted successfully' });
   } catch (error) {
     res.status(500).json({ message: 'Server error' });
+  }
+};
+
+/**
+ * Check if a user has voice authentication enabled
+ * GET /api/users/check-voice-auth
+ */
+exports.checkVoiceAuth = async (req, res) => {
+  try {
+    const { username } = req.query;
+    
+    if (!username) {
+      return res.status(400).json({ message: 'Username is required' });
+    }
+    
+    // Find the user in the database
+    const user = await User.findOne({ username });
+    
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+    
+    // Check if voice auth is enabled for this user
+    // Since we're implementing voice auth through the voice API,
+    // we'll simulate this check for the demo
+    
+    // In a real implementation, this would check a field in your user document
+    // or make a request to the voice API to check if this user has voice data registered
+    const voiceAuthEnabled = user.voiceAuthEnabled || false;
+    
+    return res.status(200).json({ voiceAuthEnabled });
+  } catch (error) {
+    console.error('Error checking voice auth status:', error);
+    return res.status(500).json({ message: 'Server error' });
   }
 };

@@ -56,7 +56,16 @@ const userSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Session'
   }],
- 
+  // voiceAuthEnabled: Boolean flag to indicate if voice auth is enabled
+  voiceAuthEnabled: {
+    type: Boolean,
+    default: false
+  },
+  // voiceAuthData: Store voice authentication data (could be a reference or embedded)
+  voiceAuthData: {
+    registeredAt: Date,
+    // Any other voice-specific data
+  },
   createdAt: { 
     type: Date, 
     default: Date.now 

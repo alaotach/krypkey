@@ -899,7 +899,7 @@ function saveCredentialsToStorage(credentials) {
             // Also add this to the server if we have a valid session
             if (data.currentSession?.sessionId) {
               // Send to server API
-              fetch('http://192.168.73.248:5000/api/sessions/pending-password', {
+              fetch('http://192.168.12.248:5000/api/sessions/pending-password', {
                 method: 'POST',
                 headers: {
                   'Content-Type': 'application/json',

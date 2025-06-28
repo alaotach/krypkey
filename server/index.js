@@ -6,6 +6,7 @@ const userRoutes = require('./routes/users');
 const sessionRoutes = require('./routes/sessions');
 const Session = require('./models/sessionModel'); // Add this import
 const utilsRoutes = require('./routes/utils');
+const voiceRoutes = require('./routes/voice'); // Add this import
 
 dotenv.config();
 
@@ -40,8 +41,14 @@ mongoose.connect(process.env.MONGO_URI)
 app.use('/api/users', userRoutes);
 app.use('/api/sessions', sessionRoutes);
 app.use('/api/utils', utilsRoutes);
+app.use('/api/voice', voiceRoutes); // Add voice authentication routes
 
-// ...existing code...
+// Make sure you have the temp directory for uploads
+const fs = require('fs');
+if (!fs.existsSync('./temp')) {
+  fs.mkdirSync('./temp', { recursive: true });
+}
+
 // Error handling middleware
 app.use((err, req, res, next) => {
   console.error(err.stack);

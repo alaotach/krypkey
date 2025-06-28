@@ -3,6 +3,7 @@ const { checkUsername, createUser, addPassword, getPasswords, deleteUser, delete
 const { authenticateToken } = require('../middleware/auth');
 const jwt = require('jsonwebtoken');
 const User = require('../models/userModel');
+const userController = require('../controllers/userController');
 
 const router = express.Router();
 
@@ -34,6 +35,9 @@ router.post('/login', async (req, res) => {
     res.status(500).json({ message: `Server error, ${user._id}` });
   }
 });
+
+// Check if voice auth is enabled for a user
+router.get('/check-voice-auth', userController.checkVoiceAuth);
 
 // Protected routes
 router.use(authenticateToken);

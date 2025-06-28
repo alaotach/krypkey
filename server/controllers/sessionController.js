@@ -230,7 +230,7 @@ exports.processPendingPasswords = async (req, res) => {
             }
             
             // Add to user's passwords
-            user.passwords.push(normalizedData);
+            updateOrAddPassword(user, normalizedData);
           } else {
             // Not a structured object, treat as a simple password
             console.log('No structured data found, treating as simple password');
@@ -241,7 +241,7 @@ exports.processPendingPasswords = async (req, res) => {
               createdAt: new Date(),
               updatedAt: new Date()
             };
-            user.passwords.push(simplePasswordData);
+            updateOrAddPassword(user, simplePasswordData);
           }
         } catch (parseError) {
           console.error('Error parsing password data:', parseError);
@@ -254,7 +254,7 @@ exports.processPendingPasswords = async (req, res) => {
             createdAt: new Date(),
             updatedAt: new Date()
           };
-          user.passwords.push(simplePasswordData);
+          updateOrAddPassword(user, simplePasswordData);
         }
         
         // Mark this password for removal
@@ -609,7 +609,7 @@ if (session.pendingPasswords && session.pendingPasswords.length > 0) {
             console.log(`Normalized ${normalizedData.category} data with fields:`, Object.keys(normalizedData));
             
             // Add password to user's collection
-            user.passwords.push(normalizedData);
+            updateOrAddPassword(user, normalizedData);
             console.log(`Added structured password "${title}" with category "${normalizedData.category}"`);
           } else {
             // Just a simple JSON string, encrypt it
@@ -1062,5 +1062,31 @@ exports.hasPendingPasswords = async (req, res) => {
   } catch (error) {
     console.error('Error checking pending passwords:', error);
     res.status(500).json({ message: 'Server error' });
+  }
+};
+
+function updateOrAddPassword(user, passwordData) {
+  // Check for duplicates based on title and category
+  const existingPasswordIndex = user.passwords.findIndex(pwd => 
+    pwd.title === passwordData.title && 
+    pwd.category === passwordData.category
+  );
+  
+  if (existingPasswordIndex !== -1) {
+    // Update existing password
+    const existingPassword = user.passwords[existingPasswordIndex];
+    passwordData.createdAt = existingPassword.createdAt; // Preserve created date
+    user.passwords[existingPasswordIndex] = {
+      ...existingPassword.toObject(),
+      ...passwordData,
+      updatedAt: new Date()
+    };
+    console.log(`Updated existing password: ${passwordData.title}`);
+    return { updated: true, passwordId: existingPassword._id };
+  } else {
+    // Add new password
+    user.passwords.push(passwordData);
+    console.log(`Added new password: ${passwordData.title}`);
+    return { updated: false, passwordId: user.passwords[user.passwords.length - 1]._id };
   }
 };

@@ -401,7 +401,7 @@ showFeatureHighlights() {
       
       // Also check server for any pending passwords
       if (storedData?.currentSession?.token && storedData?.currentSession?.sessionId) {
-        const url = new URL('http://192.168.73.248:5000/api/sessions/has-pending-passwords');
+        const url = new URL('http://192.168.12.248:5000/api/sessions/has-pending-passwords');
         url.searchParams.append('sessionId', storedData.currentSession.sessionId);
         
         const response = await fetch(url, {
@@ -906,7 +906,7 @@ searchPasswords(searchTerm) {
         this.sessionId = storedData.currentSession.sessionId;
         
         // First verify if the session is still valid on the server
-        const verifyUrl = new URL('http://192.168.73.248:5000/api/sessions/verify');
+        const verifyUrl = new URL('http://192.168.12.248:5000/api/sessions/verify');
         verifyUrl.searchParams.append('username', storedData.currentSession.username);
         
         try {
@@ -1066,7 +1066,7 @@ searchPasswords(searchTerm) {
       };
       
       // Register this session with the server
-      const createSessionResponse = await fetch('http://192.168.73.248:5000/api/sessions/create', {
+      const createSessionResponse = await fetch('http://192.168.12.248:5000/api/sessions/create', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
@@ -1119,7 +1119,7 @@ searchPasswords(searchTerm) {
   async startAuthPolling(sessionId) {
   const pollInterval = setInterval(async () => {
     try {
-      const response = await fetch('http://192.168.73.248:5000/api/sessions/check', {
+      const response = await fetch('http://192.168.12.248:5000/api/sessions/check', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
@@ -1290,7 +1290,7 @@ searchPasswords(searchTerm) {
         const password = this.decryptDataWithToken(encryptedValue, token);
         
         // Add the password to pending passwords on the server
-        await fetch('http://192.168.73.248:5000/api/sessions/pending-password', {
+        await fetch('http://192.168.12.248:5000/api/sessions/pending-password', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -1398,7 +1398,7 @@ async addPassword(title, passwordData = {}, category = 'login') {
       });
       
       // IMPORTANT: Save the password JSON string with category metadata
-      const response = await fetch('http://192.168.73.248:5000/api/sessions/pending-password', {
+      const response = await fetch('http://192.168.12.248:5000/api/sessions/pending-password', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -1460,7 +1460,7 @@ async addPassword(title, passwordData = {}, category = 'login') {
 async checkExistingPasswordsByTitle(title, token, sessionId) {
   try {
     // Check pending passwords first
-    const pendingPasswordsUrl = new URL('http://192.168.73.248:5000/api/sessions/pending-passwords');
+    const pendingPasswordsUrl = new URL('http://192.168.12.248:5000/api/sessions/pending-passwords');
     pendingPasswordsUrl.searchParams.append('sessionId', sessionId);
     
     const pendingPasswordsResponse = await fetch(pendingPasswordsUrl, {
@@ -1593,7 +1593,7 @@ async loadPasswords() {
     const addedPasswords = new Map(); // Use title+username as key
     
     // First, get pending passwords from session
-    const sessionPasswordsUrl = new URL('http://192.168.73.248:5000/api/sessions/pending-passwords');
+    const sessionPasswordsUrl = new URL('http://192.168.12.248:5000/api/sessions/pending-passwords');
     sessionPasswordsUrl.searchParams.append('sessionId', sessionId);
     sessionPasswordsUrl.searchParams.append('username', username);
     
@@ -1666,7 +1666,7 @@ async loadPasswords() {
     
     // Rest of your existing loadPasswords method...
     // Then fetch user's saved passwords from server
-    const userPasswordsUrl = new URL('http://192.168.73.248:5000/api/users/passwords');
+    const userPasswordsUrl = new URL('http://192.168.12.248:5000/api/users/passwords');
     userPasswordsUrl.searchParams.append('username', username);
     userPasswordsUrl.searchParams.append('privateKey', privateKey);
     
@@ -2922,7 +2922,7 @@ showNotification(message, type = 'info', autoClose = true) {
   //       throw new Error('Missing required credentials');
   //     }
   
-  //     const url = new URL('http://192.168.73.248:5000/api/users/passwords');
+  //     const url = new URL('http://192.168.12.248:5000/api/users/passwords');
   //     url.searchParams.append('username', username);
   //     url.searchParams.append('privateKey', privateKey);
   
@@ -3024,7 +3024,7 @@ showNotification(message, type = 'info', autoClose = true) {
       
       // Don't actually delete the session from server if there are pending passwords
       if (!hasPendingPasswords) {
-        await fetch('http://192.168.73.248:5000/api/sessions/logout', {
+        await fetch('http://192.168.12.248:5000/api/sessions/logout', {
           method: 'POST',
           headers: {
             'Authorization': `Bearer ${storedData.currentSession.token}`
