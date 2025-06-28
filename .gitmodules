@@ -1,0 +1,4 @@
+[submodule "app/app"]
+	path = app/app
+	url = https://github.com/alaotach/krypkey.git
+	branch = main
