@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>KrypKey Extension</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div class="container">
+    <div id="login-section">
+      <h2>Login with QR Code</h2>
+      <div id="qr-container">
+        <!-- QR code will be inserted here -->
+      </div>
+      <p class="status-text">Scan QR code with KrypKey mobile app</p>
+    </div>
+
+    <div id="passwords-section" style="display: none;">
+      <div class="passwords-header">
+        <h2>Your Passwords</h2>
+      </div>
+      <div id="passwords-list">
+        <!-- Passwords will be listed here -->
+      </div>
+      <button id="logout-btn" class="btn danger">Logout</button>
+    </div>
+  </div>
+  <script src="popup.js"></script>
+</body>
+</html>

@@ -1,0 +1,47 @@
+{
+  "manifest_version": 3,
+  "name": "KrypKey Extension",
+  "version": "1.0.0",
+  "description": "Password manager extension with QR code login",
+  "permissions": [
+    "storage",
+    "activeTab",
+    "tabs",
+    "webNavigation",
+    "scripting"
+  ],
+  "action": {
+    "default_popup": "popup/popup.html",
+    "default_icon": {
+      "16": "assets/icon.png",
+      "48": "assets/icon.png",
+      "128": "assets/icon.png"
+    }
+  },
+  "background": {
+    "service_worker": "background/background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content/content.js"],
+      "run_at": "document_end"
+    }
+  ],
+  "commands": {
+    "_execute_action": {
+      "suggested_key": {
+        "default": "Ctrl+Shift+K",
+        "mac": "Command+Shift+K"
+      },
+      "description": "Open KrypKey"
+    },
+    "debug_toggle": {
+      "suggested_key": {
+        "default": "Ctrl+Shift+D",
+        "mac": "Command+Shift+D"
+      },
+      "description": "Toggle debug mode"
+    }
+  }
+}

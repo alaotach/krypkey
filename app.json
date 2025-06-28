@@ -1,5 +1,17 @@
 {
   "expo": {
+<<<<<<< HEAD
+    "extra": {
+      "eas": {
+        "projectId": "e3888f76-3072-47a2-92d3-2269523507de"
+      }
+    },
+    "android": {
+      "package": "com.alaotach.krypkey"
+    }
+  }
+}
+=======
     "name": "KrypKey",
     "slug": "app",
     "version": "1.0.0",
@@ -115,3 +127,4 @@
     }
   }
 }
+>>>>>>> f5248fe0ab1d6b12d442e8c2bb2fb118b6dd7ebf

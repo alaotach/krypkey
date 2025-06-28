@@ -1,0 +1,31 @@
+version: '3'
+
+services:
+  voice-auth:
+    build:
+      context: .
+      dockerfile: Dockerfile.voice-auth
+    restart: always
+    ports:
+      - "8000:8000"
+    environment:
+      - MONGODB_URI=mongodb://mongodb:27017
+      - PORT=8000
+    depends_on:
+      - mongodb
+    volumes:
+      - voice-models:/app/pretrained_ecapa
+      - voice-asr-models:/app/pretrained_asr
+  
+  mongodb:
+    image: mongo:latest
+    restart: always
+    volumes:
+      - mongodb-data:/data/db
+    ports:
+      - "27017:27017"
+
+volumes:
+  mongodb-data:
+  voice-models:
+  voice-asr-models:
